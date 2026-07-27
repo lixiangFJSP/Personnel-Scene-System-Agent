@@ -1,17 +1,31 @@
-<template>
+﻿<template>
   <div id="app-root">
     <nav class="navbar">
       <div class="nav-inner">
         <router-link to="/" class="nav-brand">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
           人员场景数据分析系统
         </router-link>
         <div class="nav-links">
           <router-link to="/" class="nav-link">首页</router-link>
           <router-link to="/import" class="nav-link">导入数据</router-link>
+          <router-link to="/settings" class="nav-link">AI 配置</router-link>
         </div>
       </div>
     </nav>
+
+    <!-- Breadcrumb bar for sub-pages -->
+    <div v-if="showBreadcrumb" class="breadcrumb-bar">
+      <div class="breadcrumb-inner">
+        <router-link to="/" class="bc-home">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          返回首页
+        </router-link>
+        <span class="bc-sep">/</span>
+        <span class="bc-current">{{ breadcrumbTitle }}</span>
+      </div>
+    </div>
+
     <main class="main-content">
       <router-view />
     </main>
@@ -19,6 +33,26 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+
+const showBreadcrumb = computed(() => route.path !== '/')
+
+const breadcrumbTitle = computed(() => {
+  const map = {
+    '/import': '导入数据',
+    '/settings': 'AI 配置',
+  }
+  if (map[route.path]) return map[route.path]
+  if (route.path.startsWith('/import/')) {
+    const labels = { attendance: '无感考勤', safety: '劳保穿戴', operations: '作业组合', workhours: '工时统计' }
+    const mod = route.params.module || route.path.split('/').pop()
+    return labels[mod] || mod
+  }
+  return ''
+})
 </script>
 
 <style>
@@ -54,10 +88,31 @@ body{
 .nav-link:hover,.nav-link.router-link-active{
   color:#fff;background:rgba(255,255,255,.15);
 }
+
+/* Breadcrumb */
+.breadcrumb-bar{
+  background:#fff;
+  border-bottom:1px solid #e2e8f0;
+}
+.breadcrumb-inner{
+  max-width:1100px;margin:0 auto;
+  display:flex;align-items:center;gap:8px;
+  padding:0 24px;height:40px;
+  font-size:13px;
+}
+.bc-home{
+  display:inline-flex;align-items:center;gap:4px;
+  color:#2563eb;text-decoration:none;font-weight:500;
+}
+.bc-home:hover{color:#1d4ed8}
+.bc-sep{color:#cbd5e1}
+.bc-current{color:#64748b;font-weight:500}
+
 .main-content{max-width:1100px;margin:0 auto;padding:28px 24px 40px}
 @media(max-width:720px){
   .nav-inner{padding:0 16px}
   .nav-brand{font-size:15px}
   .main-content{padding:20px 16px 32px}
+  .breadcrumb-inner{padding:0 16px}
 }
 </style>

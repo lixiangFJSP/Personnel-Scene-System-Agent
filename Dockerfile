@@ -3,7 +3,11 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install
 COPY . .
-RUN npm run build
+RUN npm run build && \
+    cp -r /app/无感考勤看板文件 /app/dist/ && \
+    cp -r /app/劳保穿戴看板文件 /app/dist/ && \
+    cp -r /app/作业组合看板文件 /app/dist/ && \
+    cp -r /app/工时统计看板文件 /app/dist/
 
 FROM nginx:1.25-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
