@@ -7,6 +7,8 @@ from services.analysis_prompts import build_analysis_prompt
 
 async def analyze_data(module: str, data) -> dict:
     cfg = load_config()
+    if not cfg.api_key or not cfg.api_key.strip():
+        return {"success": False, "error": "请先在 AI 配置页面设置有效的 API Key"}
     resolved = resolve_config(cfg)
 
     data_json = json.dumps(data, ensure_ascii=False, indent=2)
@@ -50,6 +52,8 @@ async def analyze_data(module: str, data) -> dict:
 
 async def test_connection() -> dict:
     cfg = load_config()
+    if not cfg.api_key or not cfg.api_key.strip():
+        return {"success": False, "error": "请先在 AI 配置页面设置有效的 API Key"}
     resolved = resolve_config(cfg)
 
     headers = {

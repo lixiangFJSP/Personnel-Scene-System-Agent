@@ -61,9 +61,23 @@ details summary .gname{color:#1e40af}
 details summary .gstat{font-size:12px;color:var(--text2);font-weight:600}
 details[open] summary{border-bottom:1px solid var(--border)}
 details .gbody{padding:0}
+.ai-section .ai-badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:12px;font-weight:700;padding:6px 16px;border-radius:20px;letter-spacing:.5px;margin-bottom:14px}
+.ai-loading{display:flex;align-items:center;gap:12px;padding:16px 0;color:var(--text2);font-size:14px}
+.ai-spinner{width:24px;height:24px;border:3px solid #e2e8f0;border-top-color:#7c3aed;border-radius:50%;animation:ai-spin .8s linear infinite}
+@keyframes ai-spin{to{transform:rotate(360deg)}}
+.ai-error{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;color:#dc2626;font-size:14px;margin-top:10px}
+.ai-error button{margin-top:10px}
+.ai-result-text{font-size:14px;line-height:1.9;color:#334155;padding:8px 0}
+.ai-result-text h3{font-size:16px;font-weight:700;color:#1e293b;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid #e2e8f0}
+.ai-result-text h4{font-size:14px;font-weight:700;color:#475569;margin:14px 0 6px}
+.ai-result-text ul{margin:6px 0 12px;padding-left:22px}
+.ai-result-text li{margin-bottom:6px;line-height:1.8}
+.ai-result-text strong{color:#7c3aed}
+.ai-result-text code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px}
 @media(max-width:1000px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.cg-2{grid-template-columns:1fr}}
 </style></head><body>
 <div class="wrap">
+  <a href="/" style="display:inline-flex;align-items:center;gap:6px;color:#2563eb;text-decoration:none;font-weight:600;font-size:13px;background:#eff6ff;border:1px solid #bfdbfe;padding:6px 14px;border-radius:8px;margin-bottom:14px;transition:all .15s" onmouseover="this.style.background='#2563eb';this.style.color='#fff'" onmouseout="this.style.background='#eff6ff';this.style.color='#2563eb'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>返回至主页</a>
   <div class="header">
     <h1>考勤月度下钻分析 · 正常打卡率（月份范围版）</h1>
     <div class="sub">
@@ -84,6 +98,15 @@ details .gbody{padding:0}
   </div>
 
   <div class="kpi-grid" id="kpi-grid"></div>
+
+  <div class="section ai-section">
+    <div class="section-title"><span class="bar" style="background:var(--purple)"></span>AI 智能分析 · 数据洞察与改善建议</div>
+    <div class="section-desc">基于当前看板数据，大模型自动分析异常原因并给出可落地的改善措施。分析范围受上方月份和人员类别筛选控制。</div>
+    <div id="ai-content">
+      <div class="ai-badge">🤖 大模型分析</div>
+      <button class="btn primary" id="btn-ai-analyze" onclick="runAIAnalysis()" style="padding:10px 24px;font-size:14px">开始 AI 分析</button>
+    </div>
+  </div>
 
   <div class="section">
     <div class="section-title"><span class="bar"></span>一、月度正常打卡率趋势（管理人员 / 自由排班人员 分图）</div>
@@ -265,4 +288,62 @@ window.sortTbl=(k)=>{if(state.sortKey===k)state.sortDir=-state.sortDir;else{stat
 
 function renderAll(){renderKPI();renderDept();renderBC();renderGroups()}
 renderTrend();renderAll();
+
+// ---- AI 智能分析 ----
+async function runAIAnalysis(){
+  const el=document.getElementById('ai-content');
+  el.innerHTML='<div class="ai-loading"><div class="ai-spinner"></div>AI 正在分析考勤数据，识别异常原因并生成改善方案...</div>';
+
+  const allMonths=rangeMonths();
+  const trend=D.trend.filter(t=>allMonths.includes(t.month)&&(state.cat==='全部'||t.cat===state.cat));
+
+  const mgrTrend=D.trend.filter(t=>allMonths.includes(t.month)&&t.cat==='管理人员');
+  const freeTrend=D.trend.filter(t=>allMonths.includes(t.month)&&t.cat==='自由排班人员');
+  const mgrAvg=mgrTrend.length?(mgrTrend.reduce((s,t)=>s+t.rate,0)/mgrTrend.length).toFixed(1):'0';
+  const freeAvg=freeTrend.length?(freeTrend.reduce((s,t)=>s+t.rate,0)/freeTrend.length).toFixed(1):'0';
+
+  const deptData=(D.dept||[]).map(d=>({dept:d.dept||d.name,rate:d.rate,normal:d.normal,total:d.total,late:d.late||0,early:d.early||0,miss:d.miss||0,absent:d.absent||0}));
+
+  const summary={
+    title:'无感考勤月度下钻分析',
+    period:allMonths.length?`${allMonths[0]} ~ ${allMonths[allMonths.length-1]}（${allMonths.length}个月）`:'全部',
+    category:state.cat,
+    totalRecords:trend.reduce((s,t)=>s+(t.total||0),0),
+    managers:{recordCount:mgrTrend.reduce((s,t)=>s+(t.total||0),0),avgRate:mgrAvg+'%'},
+    freeSchedule:{recordCount:freeTrend.reduce((s,t)=>s+(t.total||0),0),avgRate:freeAvg+'%'},
+    monthlyTrend:trend.slice(0,50),
+    deptSummary:deptData.slice(0,30)
+  };
+
+  try{
+    const resp=await fetch('/api/analyze',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({module:'attendance',data:summary})
+    });
+    const resp2 = resp;
+    if(!resp2.ok){
+      let detail='';
+      try{const err=await resp2.json();detail=err.detail||JSON.stringify(err)}catch(ex){detail=resp2.statusText}
+      el.innerHTML='<div class="ai-error"><p>AI 分析请求失败（HTTP '+resp2.status+'）</p><p style="margin-top:8px;color:#64748b;font-size:13px">'+detail+'</p><p style="margin-top:8px;color:#64748b;font-size:13px">请确认后端已启动且 AI 配置正确</p><button class="btn primary" style="margin-top:10px" onclick="runAIAnalysis()">重试</button></div>';
+    }else{
+      const data=await resp2.json();
+      if(data.success){
+        const html=data.analysis
+          .replace(/^### (.+)$/gm,'<h4>$1</h4>')
+          .replace(/^## (.+)$/gm,'<h3>$1</h3>')
+          .replace(/^- (.+)$/gm,'<li>$1</li>')
+          .replace(/(<li>.*<\/li>\n?)+/g,'<ul>$&</ul>')
+          .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+          .replace(/\n\n/g,'<br/><br/>');
+        el.innerHTML='<div class="ai-badge">🤖 大模型分析</div><div class="ai-result-text">'+html+'</div><button class="btn primary" style="margin-top:16px;padding:10px 24px;font-size:14px" onclick="runAIAnalysis()">🔄 重新分析</button>';
+      }else{
+        const errMsg=data.error||data.detail||'未知错误';
+        const isKeyError=errMsg.includes('API Key');
+        el.innerHTML='<div class="ai-error"><p>AI 分析失败：'+errMsg+'</p>'+(isKeyError?'<p style="margin-top:8px;color:#64748b;font-size:13px">请在 <a href="/settings" style="color:#2563eb">AI 配置</a> 中设置有效的 API Key</p>':'')+'<button class="btn primary" style="margin-top:10px" onclick="runAIAnalysis()">重试</button></div>';
+      }
+    }}catch(e){
+    el.innerHTML='<div class="ai-error"><p>无法连接后端服务</p><p style="margin-top:8px;color:#64748b;font-size:13px">请确认后端已启动：python backend/main.py</p><button class="btn primary" style="margin-top:10px" onclick="runAIAnalysis()">重试</button></div>';
+  }
+}
 </script></body></html>

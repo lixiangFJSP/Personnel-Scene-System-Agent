@@ -44,10 +44,32 @@ tr:hover td{background:#f9fafb}
 .neg{color:var(--red);font-weight:600}.pos{color:var(--green);font-weight:600}
 footer{text-align:center;font-size:12px;color:var(--sub);padding:14px}
 @media(max-width:768px){.grid2{grid-template-columns:1fr}}
+
+.ai-section .ai-badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:12px;font-weight:700;padding:6px 16px;border-radius:20px;letter-spacing:.5px;margin-bottom:14px}
+.ai-loading{display:flex;align-items:center;gap:12px;padding:16px 0;color:#666;font-size:14px}
+.ai-spinner{width:24px;height:24px;border:3px solid #e2e8f0;border-top-color:#7c3aed;border-radius:50%;animation:ai-spin .8s linear infinite}
+@keyframes ai-spin{to{transform:rotate(360deg)}}
+.ai-error{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;color:#dc2626;font-size:14px;margin-top:10px}
+.ai-error button{margin-top:10px}
+.ai-result-text{font-size:14px;line-height:1.9;color:#334155;padding:8px 0}
+.ai-result-text h3{font-size:16px;font-weight:700;color:#1e293b;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid #e2e8f0}
+.ai-result-text h4{font-size:14px;font-weight:700;color:#475569;margin:14px 0 6px}
+.ai-result-text ul{margin:6px 0 12px;padding-left:22px}
+.ai-result-text li{margin-bottom:6px;line-height:1.8}
+.ai-result-text strong{color:#7c3aed}
+.ai-result-text code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px}
+
+.ai-section{background:#fff;border-radius:12px;padding:20px;margin-bottom:18px;border:1px solid #e2e8f0}
+.ai-section .section-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.ai-section .section-title .bar{width:4px;height:18px;background:#7c3aed;border-radius:2px;flex-shrink:0}
+.ai-section .section-desc{font-size:13px;color:#64748b;margin-bottom:14px}
+.btn.primary{padding:10px 24px;border:1px solid #2563eb;border-radius:6px;background:#2563eb;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+.btn.primary:hover{background:#1d4ed8;border-color:#1d4ed8}
 </style>
 </head>
 <body>
 <div class="wrap">
+<a href="/" style="display:inline-flex;align-items:center;gap:6px;color:#2563eb;text-decoration:none;font-weight:600;font-size:13px;background:#eff6ff;border:1px solid #bfdbfe;padding:6px 14px;border-radius:8px;margin-bottom:14px;transition:all .15s" onmouseover="this.style.background='#2563eb';this.style.color='#fff'" onmouseout="this.style.background='#eff6ff';this.style.color='#2563eb'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>返回至主页</a>
 <header>
   <h1>工时统计分析看板 · 壳体成型工段</h1>
   <p>数据来源：工时统计数据源.xlsx ｜ 统计区间：2026/6/1 – 2026/6/25 ｜ 13 个生产批次 × 6 个已采集工步 ｜ MES 报工 vs 人员场景系统</p>
@@ -55,6 +77,16 @@ footer{text-align:center;font-size:12px;color:var(--sub);padding:14px}
 </header>
 
 <div class="kpis" id="kpis"></div>
+  <div class="ai-section">
+    <div class="section-title"><span class="bar"></span>AI 智能分析 · 数据洞察与改善建议</div>
+    <div class="section-desc">基于当前看板数据，大模型自动分析异常原因并给出可落地的改善措施。</div>
+    <div id="ai-content">
+      <div class="ai-badge">🤖 大模型分析</div>
+      <button class="btn primary" id="btn-ai-analyze" onclick="runAIAnalysis()" style="padding:10px 24px;font-size:14px">开始 AI 分析</button>
+    </div>
+  </div>
+
+
 
 <div class="grid2">
   <div class="card" style="grid-column:1/-1">
@@ -1426,6 +1458,55 @@ function renderTbl(){
 }
 fStep.onchange=fBatch.onchange=renderTbl;
 renderTbl();
+
+
+// ---- AI 智能分析 ----
+async function runAIAnalysis(){
+  const el=document.getElementById('ai-content');
+  el.innerHTML='<div class="ai-loading"><div class="ai-spinner"></div>AI 正在分析数据，识别异常原因并生成改善方案...</div>';
+  try{
+    const steps = DATA.steps || [];
+    const batches = DATA.batches || [];
+    const records = DATA.records || [];
+    const summary = {
+      title: '工时统计分析看板',
+      totalSteps: steps.length,
+      totalBatches: batches.length,
+      totalRecords: records.length,
+      stepsSummary: steps.slice(0, 30),
+      batchesSummary: batches.slice(0, 20),
+      recordsSample: records.slice(0, 30)
+    };
+    const resp=await fetch('/api/analyze',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({module:'workhours',data:summary})
+    });
+    if(!resp.ok){
+      let detail='';
+      try{const err=await resp.json();detail=err.detail||JSON.stringify(err)}catch(ex){detail=resp.statusText}
+      el.innerHTML='<div class="ai-error"><p>AI 分析请求失败（HTTP '+resp.status+'）</p><p style="margin-top:8px;color:#64748b;font-size:13px">'+detail+'</p><p style="margin-top:8px;color:#64748b;font-size:13px">请确认后端已启动且 AI 配置正确</p><button class="btn primary" style="margin-top:10px" onclick="runAIAnalysis()">重试</button></div>';
+      return;
+    }
+    const data=await resp.json();
+    if(data.success){
+      const html=data.analysis
+        .replace(/^### (.+)$/gm,'<h4>$1</h4>')
+        .replace(/^## (.+)$/gm,'<h3>$1</h3>')
+        .replace(/^- (.+)$/gm,'<li>$1</li>')
+        .replace(/(<li>.*<\/li>\n?)+/g,'<ul>$&</ul>')
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/\n\n/g,'<br/><br/>');
+      el.innerHTML='<div class="ai-badge">🤖 大模型分析</div><div class="ai-result-text">'+html+'</div><button class="btn primary" style="margin-top:16px;padding:10px 24px;font-size:14px" onclick="runAIAnalysis()">🔄 重新分析</button>';
+    }else{
+      const errMsg=data.error||data.detail||'未知错误';
+      const isKeyError=errMsg.includes('API Key');
+      el.innerHTML='<div class="ai-error"><p>AI 分析失败：'+errMsg+'</p>'+(isKeyError?'<p style="margin-top:8px;color:#64748b;font-size:13px">请在 <a href="/settings" style="color:#2563eb">AI 配置</a> 中设置有效的 API Key</p>':'')+'<button class="btn primary" style="margin-top:10px" onclick="runAIAnalysis()">重试</button></div>';
+    }
+  }catch(e){
+    el.innerHTML='<div class="ai-error"><p>无法连接后端服务</p><p style="margin-top:8px;color:#64748b;font-size:13px">请确认后端已启动：python backend/main.py</p><button class="btn primary" style="margin-top:10px" onclick="runAIAnalysis()">重试</button></div>';
+  }
+}
 </script>
 </body>
 </html>

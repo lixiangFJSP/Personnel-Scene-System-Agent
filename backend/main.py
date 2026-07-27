@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Any
 from pydantic import BaseModel
 from config import LLMConfig, load_config, save_config
 from services.llm_service import analyze_data, test_connection
@@ -73,7 +74,7 @@ async def upload_file(file: UploadFile = File(...)):
 
 class AnalysisRequest(BaseModel):
     module: str
-    data: list
+    data: Any
 
 
 @app.post("/api/analyze")

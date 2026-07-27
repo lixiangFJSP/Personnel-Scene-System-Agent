@@ -17,11 +17,11 @@
     <!-- Breadcrumb bar for sub-pages -->
     <div v-if="showBreadcrumb" class="breadcrumb-bar">
       <div class="breadcrumb-inner">
-        <router-link to="/" class="bc-home">
+        <router-link to="/" class="bc-home-btn" title="返回至主页">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          返回首页
+          返回至主页
         </router-link>
-        <span class="bc-sep">/</span>
+        <span class="bc-sep">›</span>
         <span class="bc-current">{{ breadcrumbTitle }}</span>
       </div>
     </div>
@@ -97,16 +97,23 @@ body{
 .breadcrumb-inner{
   max-width:1100px;margin:0 auto;
   display:flex;align-items:center;gap:8px;
-  padding:0 24px;height:40px;
+  padding:0 24px;height:44px;
   font-size:13px;
 }
-.bc-home{
-  display:inline-flex;align-items:center;gap:4px;
-  color:#2563eb;text-decoration:none;font-weight:500;
+.bc-home-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  color:#2563eb;text-decoration:none;font-weight:600;
+  background:#eff6ff;border:1px solid #bfdbfe;
+  padding:6px 14px;border-radius:8px;
+  font-size:13px;
+  transition:all .15s;
 }
-.bc-home:hover{color:#1d4ed8}
-.bc-sep{color:#cbd5e1}
-.bc-current{color:#64748b;font-weight:500}
+.bc-home-btn:hover{
+  background:#2563eb;color:#fff;
+  border-color:#2563eb;
+}
+.bc-sep{color:#cbd5e1;font-size:16px;font-weight:300}
+.bc-current{color:#475569;font-weight:600}
 
 .main-content{max-width:1100px;margin:0 auto;padding:28px 24px 40px}
 @media(max-width:720px){
