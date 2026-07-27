@@ -6,4 +6,10 @@ services:
     container_name: personnel-analytics
     ports:
       - "8080:80"
+    volumes:
+      # 持久化 LLM 配置（API Key 等），容器重启不丢失
+      - analytics-config:/app/data
     restart: unless-stopped
+
+volumes:
+  analytics-config:

@@ -3,5 +3,4 @@ dist
 .git
 .gitignore
 vite.config.js.timestamp-*.mjs
-*.py
 *.xlsx

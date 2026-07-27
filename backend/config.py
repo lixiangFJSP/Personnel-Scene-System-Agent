@@ -3,7 +3,10 @@ import json
 import os
 from pydantic import BaseModel
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "llm_config.json")
+# Docker 环境使用 volume 目录，本地开发使用 backend 目录
+_DATA_DIR = os.environ.get("DATA_DIR", os.path.dirname(__file__))
+os.makedirs(_DATA_DIR, exist_ok=True)
+CONFIG_FILE = os.path.join(_DATA_DIR, "llm_config.json")
 
 
 class LLMConfig(BaseModel):
