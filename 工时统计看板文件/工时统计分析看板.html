@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工时统计分析看板 · 壳体成型工段</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6fa; --card:#fff; --ink:#1f2937; --sub:#6b7280; --line:#e5e7eb;
+  --blue:#2563eb; --orange:#ea580c; --green:#16a34a; --red:#dc2626;
+  --radius:10px; --gap:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Microsoft YaHei","PingFang SC",-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+.wrap{max-width:1440px;margin:0 auto;padding:20px}
+header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:var(--radius);padding:22px 26px;margin-bottom:var(--gap)}
+header h1{font-size:22px;font-weight:700}
+header p{font-size:13px;opacity:.85;margin-top:6px}
+.badge{display:inline-block;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:3px 12px;font-size:12px;margin-top:8px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--gap);margin-bottom:var(--gap)}
+.kpi{background:var(--card);border-radius:var(--radius);padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.kpi .lb{font-size:12px;color:var(--sub);letter-spacing:.5px}
+.kpi .vl{font-size:26px;font-weight:700;margin:4px 0}
+.kpi .ft{font-size:12px;font-weight:500}
+.up{color:var(--red)}.down{color:var(--green)}.flat{color:var(--sub)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:var(--gap);margin-bottom:var(--gap)}
+.card{background:var(--card);border-radius:var(--radius);padding:18px 22px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.card h3{font-size:15px;font-weight:600;margin-bottom:4px}
+.card .hint{font-size:12px;color:var(--sub);margin-bottom:12px}
+.card canvas{max-height:320px}
+.insights{background:#fffbeb;border:1px solid #fde68a;border-radius:var(--radius);padding:18px 22px;margin-bottom:var(--gap)}
+.insights h3{font-size:15px;margin-bottom:10px;color:#92400e}
+.insights li{font-size:13px;margin:6px 0 6px 18px}
+.insights b{color:#b91c1c}
+.filterbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.filterbar label{font-size:13px;color:var(--sub)}
+.filterbar select{padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 10px;border-bottom:2px solid var(--line);color:var(--sub);font-size:12px;white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--ink);background:#f9fafb}
+td{padding:8px 10px;border-bottom:1px solid #f3f4f6;white-space:nowrap}
+tr:hover td{background:#f9fafb}
+.neg{color:var(--red);font-weight:600}.pos{color:var(--green);font-weight:600}
+footer{text-align:center;font-size:12px;color:var(--sub);padding:14px}
+@media(max-width:768px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>工时统计分析看板 · 壳体成型工段</h1>
+  <p>数据来源：工时统计数据源.xlsx ｜ 统计区间：2026/6/1 – 2026/6/25 ｜ 13 个生产批次 × 6 个已采集工步 ｜ MES 报工 vs 人员场景系统</p>
+  <span class="badge">注：人员场景系统缺 F260212 / 214 / 216 / 218 / 220CE 共 5 支数据（约 6/16–6/22）</span>
+</header>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="grid2">
+  <div class="card" style="grid-column:1/-1">
+    <h3>① 单支叶片总节拍趋势（6 工步合计，min）</h3>
+    <div class="hint">柱：单支总节拍（红=达成率>115%，橙=105–115%，绿=≤105%）｜ 红虚线：标准节拍合计 394 min ｜ 蓝折线：达成率（右轴）</div>
+    <canvas id="c1"></canvas>
+  </div>
+  <div class="card" style="grid-column:1/-1">
+    <h3>② 分工步实际工时趋势（min/支）</h3>
+    <div class="hint">实线为实际工时，同色虚线为对应标准节拍；点击图例可开关工步</div>
+    <canvas id="c2"></canvas>
+  </div>
+  <div class="card">
+    <h3>③ 工步均值对比：标准 vs 实际 vs 场景系统</h3>
+    <div class="hint">OT12 前缘预制UD安放为最大瓶颈，实际均值超标准 +141.9%</div>
+    <canvas id="c3"></canvas>
+  </div>
+  <div class="card">
+    <h3>④ 批次人工时：MES 报工 vs 场景系统（人·min）</h3>
+    <div class="hint">柱：人工时合计 ｜ 橙折线：场景系统覆盖率（右轴，6/23–6/24 异常冲高）</div>
+    <canvas id="c4"></canvas>
+  </div>
+</div>
+
+<div class="insights">
+  <h3>关键趋势发现</h3>
+  <ul id="insightList"></ul>
+</div>
+
+<div class="card">
+  <h3>明细数据（78 条记录，点击表头排序）</h3>
+  <div class="filterbar" style="margin-top:10px">
+    <label>工步筛选</label><select id="fStep"></select>
+    <label>批次筛选</label><select id="fBatch"></select>
+  </div>
+  <div style="overflow-x:auto"><table id="tbl"></table></div>
+</div>
+<footer>生成时间：2026-07-20 ｜ WorkBuddy 数据分析</footer>
+</div>
+
+<script>
+const DATA = {
+ "steps": [
+  {
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0
+  },
+  {
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0
+  },
+  {
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0
+  },
+  {
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0
+  },
+  {
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0
+  },
+  {
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0
+  }
+ ],
+ "records": [
+  {
+   "batch": 0,
+   "date": "2026/6/1",
+   "serial": "F260191CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 38.68,
+   "headcount": 60.0,
+   "scene": 71.45,
+   "mes_man": 2320.8,
+   "scene_man": 762.0
+  },
+  {
+   "batch": 0,
+   "date": "2026/6/1",
+   "serial": "F260191CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 69.83,
+   "headcount": 60.0,
+   "scene": 188.9,
+   "mes_man": 4189.8,
+   "scene_man": 2746.0
+  },
+  {
+   "batch": 0,
+   "date": "2026/6/1",
+   "serial": "F260191CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 103.0,
+   "headcount": 60.0,
+   "scene": 108.98,
+   "mes_man": 6180.0,
+   "scene_man": 4075.0
+  },
+  {
+   "batch": 0,
+   "date": "2026/6/1",
+   "serial": "F260191CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 112.72,
+   "headcount": 60.0,
+   "scene": 127.14,
+   "mes_man": 6763.2,
+   "scene_man": 3109.0
+  },
+  {
+   "batch": 0,
+   "date": "2026/6/1",
+   "serial": "F260191CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 58.0,
+   "headcount": 60.0,
+   "scene": 61.45,
+   "mes_man": 3480.0,
+   "scene_man": 722.0
+  },
+  {
+   "batch": 0,
+   "date": "2026/6/1",
+   "serial": "F260191CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 51.0,
+   "headcount": 63.0,
+   "scene": 95.05,
+   "mes_man": 3213.0,
+   "scene_man": 560.0
+  },
+  {
+   "batch": 1,
+   "date": "2026/6/2",
+   "serial": "F260193CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 38.05,
+   "headcount": 60.0,
+   "scene": 65.28,
+   "mes_man": 2283.0,
+   "scene_man": 580.88
+  },
+  {
+   "batch": 1,
+   "date": "2026/6/2",
+   "serial": "F260193CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 74.48,
+   "headcount": 60.0,
+   "scene": 204.4,
+   "mes_man": 4468.8,
+   "scene_man": 2384.24
+  },
+  {
+   "batch": 1,
+   "date": "2026/6/2",
+   "serial": "F260193CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 187.5,
+   "headcount": 60.0,
+   "scene": 194.1,
+   "mes_man": 11250.0,
+   "scene_man": 7936.07
+  },
+  {
+   "batch": 1,
+   "date": "2026/6/2",
+   "serial": "F260193CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 75.92,
+   "headcount": 60.0,
+   "scene": 201.12,
+   "mes_man": 4555.2,
+   "scene_man": 2499.25
+  },
+  {
+   "batch": 1,
+   "date": "2026/6/2",
+   "serial": "F260193CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 36.67,
+   "headcount": 60.0,
+   "scene": 40.98,
+   "mes_man": 2200.2,
+   "scene_man": 348.06
+  },
+  {
+   "batch": 1,
+   "date": "2026/6/2",
+   "serial": "F260193CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 59.02,
+   "headcount": 60.0,
+   "scene": 58.62,
+   "mes_man": 3541.2,
+   "scene_man": 252.02
+  },
+  {
+   "batch": 2,
+   "date": "2026/6/3",
+   "serial": "F260195CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 33.15,
+   "headcount": 60.0,
+   "scene": 67.0,
+   "mes_man": 1989.0,
+   "scene_man": 502.0
+  },
+  {
+   "batch": 2,
+   "date": "2026/6/3",
+   "serial": "F260195CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 94.6,
+   "headcount": 60.0,
+   "scene": 201.4,
+   "mes_man": 5676.0,
+   "scene_man": 2827.0
+  },
+  {
+   "batch": 2,
+   "date": "2026/6/3",
+   "serial": "F260195CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 176.0,
+   "headcount": 60.0,
+   "scene": 185.2,
+   "mes_man": 10560.0,
+   "scene_man": 5941.0
+  },
+  {
+   "batch": 2,
+   "date": "2026/6/3",
+   "serial": "F260195CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 103.23,
+   "headcount": 60.0,
+   "scene": 213.42,
+   "mes_man": 6193.8,
+   "scene_man": 1617.0
+  },
+  {
+   "batch": 2,
+   "date": "2026/6/3",
+   "serial": "F260195CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 31.35,
+   "headcount": 60.0,
+   "scene": 32.87,
+   "mes_man": 1881.0,
+   "scene_man": 162.0
+  },
+  {
+   "batch": 2,
+   "date": "2026/6/3",
+   "serial": "F260195CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 36.98,
+   "headcount": 63.0,
+   "scene": 61.01,
+   "mes_man": 2329.74,
+   "scene_man": 139.61
+  },
+  {
+   "batch": 3,
+   "date": "2026/6/4",
+   "serial": "F260197CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 30.88,
+   "headcount": 60.0,
+   "scene": 112.43,
+   "mes_man": 1852.8,
+   "scene_man": 769.05
+  },
+  {
+   "batch": 3,
+   "date": "2026/6/4",
+   "serial": "F260197CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 65.83,
+   "headcount": 60.0,
+   "scene": 202.6,
+   "mes_man": 3949.8,
+   "scene_man": 2520.88
+  },
+  {
+   "batch": 3,
+   "date": "2026/6/4",
+   "serial": "F260197CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 120.5,
+   "headcount": 60.0,
+   "scene": 123.65,
+   "mes_man": 7230.0,
+   "scene_man": 3713.07
+  },
+  {
+   "batch": 3,
+   "date": "2026/6/4",
+   "serial": "F260197CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 105.65,
+   "headcount": 60.0,
+   "scene": 208.05,
+   "mes_man": 6339.0,
+   "scene_man": 1970.09
+  },
+  {
+   "batch": 3,
+   "date": "2026/6/4",
+   "serial": "F260197CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 40.63,
+   "headcount": 63.0,
+   "scene": 44.03,
+   "mes_man": 2559.69,
+   "scene_man": 372.76
+  },
+  {
+   "batch": 3,
+   "date": "2026/6/4",
+   "serial": "F260197CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 60.1,
+   "headcount": 63.0,
+   "scene": 59.7,
+   "mes_man": 3786.3,
+   "scene_man": 233.14
+  },
+  {
+   "batch": 4,
+   "date": "2026/6/6",
+   "serial": "F260199CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 33.02,
+   "headcount": 60.0,
+   "scene": 114.6,
+   "mes_man": 1981.2,
+   "scene_man": 509.39
+  },
+  {
+   "batch": 4,
+   "date": "2026/6/6",
+   "serial": "F260199CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 95.73,
+   "headcount": 60.0,
+   "scene": 204.5,
+   "mes_man": 5743.8,
+   "scene_man": 3216.67
+  },
+  {
+   "batch": 4,
+   "date": "2026/6/6",
+   "serial": "F260199CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 176.5,
+   "headcount": 60.0,
+   "scene": 171.92,
+   "mes_man": 10590.0,
+   "scene_man": 4538.49
+  },
+  {
+   "batch": 4,
+   "date": "2026/6/6",
+   "serial": "F260199CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 103.0,
+   "headcount": 60.0,
+   "scene": 220.83,
+   "mes_man": 6180.0,
+   "scene_man": 1698.66
+  },
+  {
+   "batch": 4,
+   "date": "2026/6/6",
+   "serial": "F260199CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 30.33,
+   "headcount": 60.0,
+   "scene": 31.53,
+   "mes_man": 1819.8,
+   "scene_man": 201.65
+  },
+  {
+   "batch": 4,
+   "date": "2026/6/6",
+   "serial": "F260199CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 63.1,
+   "headcount": 62.0,
+   "scene": 61.0,
+   "mes_man": 3912.2,
+   "scene_man": 173.83
+  },
+  {
+   "batch": 5,
+   "date": "2026/6/7",
+   "serial": "F260201CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 30.83,
+   "headcount": 62.0,
+   "scene": 58.88,
+   "mes_man": 1911.46,
+   "scene_man": 327.76
+  },
+  {
+   "batch": 5,
+   "date": "2026/6/7",
+   "serial": "F260201CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 65.18,
+   "headcount": 62.0,
+   "scene": 217.8,
+   "mes_man": 4041.16,
+   "scene_man": 2663.97
+  },
+  {
+   "batch": 5,
+   "date": "2026/6/7",
+   "serial": "F260201CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 131.5,
+   "headcount": 62.0,
+   "scene": 133.42,
+   "mes_man": 8153.0,
+   "scene_man": 4256.71
+  },
+  {
+   "batch": 5,
+   "date": "2026/6/7",
+   "serial": "F260201CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 80.42,
+   "headcount": 62.0,
+   "scene": 225.72,
+   "mes_man": 4986.04,
+   "scene_man": 2586.91
+  },
+  {
+   "batch": 5,
+   "date": "2026/6/7",
+   "serial": "F260201CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 42.27,
+   "headcount": 62.0,
+   "scene": 43.27,
+   "mes_man": 2620.74,
+   "scene_man": 435.46
+  },
+  {
+   "batch": 5,
+   "date": "2026/6/7",
+   "serial": "F260201CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 61.0,
+   "headcount": 62.0,
+   "scene": 55.2,
+   "mes_man": 3782.0,
+   "scene_man": 157.12
+  },
+  {
+   "batch": 6,
+   "date": "2026/6/9",
+   "serial": "F260203CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 32.15,
+   "headcount": 60.0,
+   "scene": 122.1,
+   "mes_man": 1929.0,
+   "scene_man": 694.53
+  },
+  {
+   "batch": 6,
+   "date": "2026/6/9",
+   "serial": "F260203CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 67.17,
+   "headcount": 60.0,
+   "scene": 223.9,
+   "mes_man": 4030.2,
+   "scene_man": 2688.8
+  },
+  {
+   "batch": 6,
+   "date": "2026/6/9",
+   "serial": "F260203CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 139.5,
+   "headcount": 60.0,
+   "scene": 134.48,
+   "mes_man": 8370.0,
+   "scene_man": 3772.76
+  },
+  {
+   "batch": 6,
+   "date": "2026/6/9",
+   "serial": "F260203CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 102.35,
+   "headcount": 60.0,
+   "scene": 214.15,
+   "mes_man": 6141.0,
+   "scene_man": 2150.83
+  },
+  {
+   "batch": 6,
+   "date": "2026/6/9",
+   "serial": "F260203CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 70.05,
+   "headcount": 68.0,
+   "scene": 73.55,
+   "mes_man": 4763.4,
+   "scene_man": 657.61
+  },
+  {
+   "batch": 6,
+   "date": "2026/6/9",
+   "serial": "F260203CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 85.3,
+   "headcount": 62.0,
+   "scene": 86.1,
+   "mes_man": 5288.6,
+   "scene_man": 230.89
+  },
+  {
+   "batch": 7,
+   "date": "2026/6/11",
+   "serial": "F260207CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 37.63,
+   "headcount": 60.0,
+   "scene": 62.47,
+   "mes_man": 2257.8,
+   "scene_man": 510.47
+  },
+  {
+   "batch": 7,
+   "date": "2026/6/11",
+   "serial": "F260207CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 70.93,
+   "headcount": 60.0,
+   "scene": 211.3,
+   "mes_man": 4255.8,
+   "scene_man": 2177.43
+  },
+  {
+   "batch": 7,
+   "date": "2026/6/11",
+   "serial": "F260207CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 107.0,
+   "headcount": 60.0,
+   "scene": 110.62,
+   "mes_man": 6420.0,
+   "scene_man": 3571.83
+  },
+  {
+   "batch": 7,
+   "date": "2026/6/11",
+   "serial": "F260207CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 71.3,
+   "headcount": 60.0,
+   "scene": 231.73,
+   "mes_man": 4278.0,
+   "scene_man": 2794.02
+  },
+  {
+   "batch": 7,
+   "date": "2026/6/11",
+   "serial": "F260207CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 31.07,
+   "headcount": 60.0,
+   "scene": 31.62,
+   "mes_man": 1864.2,
+   "scene_man": 111.75
+  },
+  {
+   "batch": 7,
+   "date": "2026/6/11",
+   "serial": "F260207CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 65.68,
+   "headcount": 60.0,
+   "scene": 64.33,
+   "mes_man": 3940.8,
+   "scene_man": 333.5
+  },
+  {
+   "batch": 8,
+   "date": "2026/6/13",
+   "serial": "F260209CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 31.8,
+   "headcount": 60.0,
+   "scene": 66.47,
+   "mes_man": 1908.0,
+   "scene_man": 593.19
+  },
+  {
+   "batch": 8,
+   "date": "2026/6/13",
+   "serial": "F260209CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 70.72,
+   "headcount": 60.0,
+   "scene": 191.6,
+   "mes_man": 4243.2,
+   "scene_man": 2793.08
+  },
+  {
+   "batch": 8,
+   "date": "2026/6/13",
+   "serial": "F260209CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 161.8,
+   "headcount": 60.0,
+   "scene": 169.87,
+   "mes_man": 9708.0,
+   "scene_man": 5542.28
+  },
+  {
+   "batch": 8,
+   "date": "2026/6/13",
+   "serial": "F260209CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 76.0,
+   "headcount": 60.0,
+   "scene": 223.13,
+   "mes_man": 4560.0,
+   "scene_man": 3244.1
+  },
+  {
+   "batch": 8,
+   "date": "2026/6/13",
+   "serial": "F260209CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 30.78,
+   "headcount": 60.0,
+   "scene": 32.32,
+   "mes_man": 1846.8,
+   "scene_man": 349.75
+  },
+  {
+   "batch": 8,
+   "date": "2026/6/13",
+   "serial": "F260209CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 70.68,
+   "headcount": 60.0,
+   "scene": 71.68,
+   "mes_man": 4240.8,
+   "scene_man": 566.01
+  },
+  {
+   "batch": 9,
+   "date": "2026/6/14",
+   "serial": "F260211CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 31.27,
+   "headcount": 60.0,
+   "scene": 118.53,
+   "mes_man": 1876.2,
+   "scene_man": 542.16
+  },
+  {
+   "batch": 9,
+   "date": "2026/6/14",
+   "serial": "F260211CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 67.67,
+   "headcount": 60.0,
+   "scene": 215.5,
+   "mes_man": 4060.2,
+   "scene_man": 2845.37
+  },
+  {
+   "batch": 9,
+   "date": "2026/6/14",
+   "serial": "F260211CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 110.6,
+   "headcount": 60.0,
+   "scene": 113.02,
+   "mes_man": 6636.0,
+   "scene_man": 2886.03
+  },
+  {
+   "batch": 9,
+   "date": "2026/6/14",
+   "serial": "F260211CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 140.27,
+   "headcount": 60.0,
+   "scene": 277.94,
+   "mes_man": 8416.2,
+   "scene_man": 2740.25
+  },
+  {
+   "batch": 9,
+   "date": "2026/6/14",
+   "serial": "F260211CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 31.18,
+   "headcount": 60.0,
+   "scene": 33.67,
+   "mes_man": 1870.8,
+   "scene_man": 479.28
+  },
+  {
+   "batch": 9,
+   "date": "2026/6/14",
+   "serial": "F260211CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 61.3,
+   "headcount": 62.0,
+   "scene": 57.2,
+   "mes_man": 3800.6,
+   "scene_man": 266.55
+  },
+  {
+   "batch": 10,
+   "date": "2026/6/23",
+   "serial": "F260222CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 33.17,
+   "headcount": 60.0,
+   "scene": 125.96,
+   "mes_man": 1990.2,
+   "scene_man": 977.76
+  },
+  {
+   "batch": 10,
+   "date": "2026/6/23",
+   "serial": "F260222CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 75.55,
+   "headcount": 60.0,
+   "scene": 203.5,
+   "mes_man": 4533.0,
+   "scene_man": 2024.46
+  },
+  {
+   "batch": 10,
+   "date": "2026/6/23",
+   "serial": "F260222CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 139.5,
+   "headcount": 60.0,
+   "scene": 289.27,
+   "mes_man": 8370.0,
+   "scene_man": 11967.56
+  },
+  {
+   "batch": 10,
+   "date": "2026/6/23",
+   "serial": "F260222CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 150.32,
+   "headcount": 60.0,
+   "scene": 311.95,
+   "mes_man": 9019.2,
+   "scene_man": 2565.29
+  },
+  {
+   "batch": 10,
+   "date": "2026/6/23",
+   "serial": "F260222CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 42.5,
+   "headcount": 60.0,
+   "scene": 87.15,
+   "mes_man": 2550.0,
+   "scene_man": 650.83
+  },
+  {
+   "batch": 10,
+   "date": "2026/6/23",
+   "serial": "F260222CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 60.93,
+   "headcount": 3.0,
+   "scene": 112.86,
+   "mes_man": 182.79,
+   "scene_man": 504.51
+  },
+  {
+   "batch": 11,
+   "date": "2026/6/24",
+   "serial": "F260224CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 30.98,
+   "headcount": 60.0,
+   "scene": 120.47,
+   "mes_man": 1858.8,
+   "scene_man": 1629.02
+  },
+  {
+   "batch": 11,
+   "date": "2026/6/24",
+   "serial": "F260224CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 74.93,
+   "headcount": 60.0,
+   "scene": 201.9,
+   "mes_man": 4495.8,
+   "scene_man": 2305.24
+  },
+  {
+   "batch": 11,
+   "date": "2026/6/24",
+   "serial": "F260224CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 184.0,
+   "headcount": 60.0,
+   "scene": 395.6,
+   "mes_man": 11040.0,
+   "scene_man": 14226.21
+  },
+  {
+   "batch": 11,
+   "date": "2026/6/24",
+   "serial": "F260224CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 74.15,
+   "headcount": 60.0,
+   "scene": 222.15,
+   "mes_man": 4449.0,
+   "scene_man": 2598.98
+  },
+  {
+   "batch": 11,
+   "date": "2026/6/24",
+   "serial": "F260224CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 32.92,
+   "headcount": 60.0,
+   "scene": 70.12,
+   "mes_man": 1975.2,
+   "scene_man": 1866.57
+  },
+  {
+   "batch": 11,
+   "date": "2026/6/24",
+   "serial": "F260224CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 59.08,
+   "headcount": 60.0,
+   "scene": 126.36,
+   "mes_man": 3544.8,
+   "scene_man": 756.4
+  },
+  {
+   "batch": 12,
+   "date": "2026/6/25",
+   "serial": "F260226CE",
+   "code": "OT01",
+   "stage": "壳体模具准备",
+   "step": "模具清理",
+   "std": 36.0,
+   "actual": 42.8,
+   "headcount": 60.0,
+   "scene": 139.7,
+   "mes_man": 2568.0,
+   "scene_man": 1434.62
+  },
+  {
+   "batch": 12,
+   "date": "2026/6/25",
+   "serial": "F260226CE",
+   "code": "OT04",
+   "stage": "壳体A部分玻纤布铺设",
+   "step": "外蒙皮第一层铺设",
+   "std": 65.0,
+   "actual": 109.45,
+   "headcount": 60.0,
+   "scene": 197.25,
+   "mes_man": 6567.0,
+   "scene_man": 2641.66
+  },
+  {
+   "batch": 12,
+   "date": "2026/6/25",
+   "serial": "F260226CE",
+   "code": "OT12",
+   "stage": "预制UD安放",
+   "step": "前缘预制UD安放",
+   "std": 60.0,
+   "actual": 149.5,
+   "headcount": 60.0,
+   "scene": 156.12,
+   "mes_man": 8970.0,
+   "scene_man": 6121.94
+  },
+  {
+   "batch": 12,
+   "date": "2026/6/25",
+   "serial": "F260226CE",
+   "code": "OT18",
+   "stage": "壳体B部分玻纤布铺设",
+   "step": "B部分第一层内蒙皮铺设",
+   "std": 81.0,
+   "actual": 66.07,
+   "headcount": 60.0,
+   "scene": 207.8,
+   "mes_man": 3964.2,
+   "scene_man": 999.9
+  },
+  {
+   "batch": 12,
+   "date": "2026/6/25",
+   "serial": "F260226CE",
+   "code": "OT26",
+   "stage": "壳体真空系统制作",
+   "step": "壳体流道铺设",
+   "std": 59.0,
+   "actual": 45.17,
+   "headcount": 62.0,
+   "scene": 48.18,
+   "mes_man": 2800.54,
+   "scene_man": 85.84
+  },
+  {
+   "batch": 12,
+   "date": "2026/6/25",
+   "serial": "F260226CE",
+   "code": "OT27",
+   "stage": "壳体真空系统制作",
+   "step": "壳体真空系统制作",
+   "std": 93.0,
+   "actual": 53.35,
+   "headcount": 62.0,
+   "scene": 56.0,
+   "mes_man": 3307.7,
+   "scene_man": 127.92
+  }
+ ],
+ "totals": [
+  {
+   "date": "2026/6/1",
+   "serial": "F260191CE",
+   "mes_man": 26146.8,
+   "scene_man": 11974.0,
+   "headcount": 60.5
+  },
+  {
+   "date": "2026/6/2",
+   "serial": "F260193CE",
+   "mes_man": 28298.4,
+   "scene_man": 14000.5,
+   "headcount": 60.0
+  },
+  {
+   "date": "2026/6/3",
+   "serial": "F260195CE",
+   "mes_man": 28629.5,
+   "scene_man": 11188.6,
+   "headcount": 60.5
+  },
+  {
+   "date": "2026/6/4",
+   "serial": "F260197CE",
+   "mes_man": 25717.6,
+   "scene_man": 9579.0,
+   "headcount": 61.0
+  },
+  {
+   "date": "2026/6/6",
+   "serial": "F260199CE",
+   "mes_man": 30227.0,
+   "scene_man": 10338.7,
+   "headcount": 60.3
+  },
+  {
+   "date": "2026/6/7",
+   "serial": "F260201CE",
+   "mes_man": 25494.4,
+   "scene_man": 10427.9,
+   "headcount": 62.0
+  },
+  {
+   "date": "2026/6/9",
+   "serial": "F260203CE",
+   "mes_man": 30522.2,
+   "scene_man": 10195.4,
+   "headcount": 61.7
+  },
+  {
+   "date": "2026/6/11",
+   "serial": "F260207CE",
+   "mes_man": 23016.6,
+   "scene_man": 9499.0,
+   "headcount": 60.0
+  },
+  {
+   "date": "2026/6/13",
+   "serial": "F260209CE",
+   "mes_man": 26506.8,
+   "scene_man": 13088.4,
+   "headcount": 60.0
+  },
+  {
+   "date": "2026/6/14",
+   "serial": "F260211CE",
+   "mes_man": 26660.0,
+   "scene_man": 9759.6,
+   "headcount": 60.3
+  },
+  {
+   "date": "2026/6/23",
+   "serial": "F260222CE",
+   "mes_man": 26645.2,
+   "scene_man": 18690.4,
+   "headcount": 50.5
+  },
+  {
+   "date": "2026/6/24",
+   "serial": "F260224CE",
+   "mes_man": 27363.6,
+   "scene_man": 23382.4,
+   "headcount": 60.0
+  },
+  {
+   "date": "2026/6/25",
+   "serial": "F260226CE",
+   "mes_man": 28177.4,
+   "scene_man": 11411.9,
+   "headcount": 60.7
+  }
+ ],
+ "note": "人员场景缺212、214、216、218、220这几支数据(对应6/16-6/22批次)"
+};
+
+const steps = DATA.steps, rec = DATA.records, totals = DATA.totals;
+const dates = totals.map(t=>t.date.slice(5));
+const stdSum = steps.reduce((a,s)=>a+s.std,0);
+const C = ['#2563eb','#ea580c','#16a34a','#7c3aed','#0d9488','#dc2626'];
+
+// ---------- KPI ----------
+const cycArr = totals.map(t=>rec.filter(r=>r.date===t.date).reduce((a,r)=>a+r.actual,0));
+const avgCyc = cycArr.reduce((a,b)=>a+b,0)/cycArr.length;
+const attain = cycArr.map(c=>c/stdSum*100);
+const avgAtt = attain.reduce((a,b)=>a+b,0)/attain.length;
+const best = totals[cycArr.indexOf(Math.min(...cycArr))];
+const worst = totals[cycArr.indexOf(Math.max(...cycArr))];
+const first3 = cycArr.slice(0,3).reduce((a,b)=>a+b,0)/3;
+const last3 = cycArr.slice(-3).reduce((a,b)=>a+b,0)/3;
+const trendPct = (last3-first3)/first3*100;
+const coverArr = totals.map(t=>t.scene_man/t.mes_man*100);
+const avgCover = coverArr.reduce((a,b)=>a+b,0)/coverArr.length;
+const stepAvg = steps.map(s=>{
+  const rs = rec.filter(r=>r.code===s.code);
+  const a = rs.reduce((x,r)=>x+r.actual,0)/rs.length;
+  const sc = rs.reduce((x,r)=>x+r.scene,0)/rs.length;
+  return {code:s.code, step:s.step, std:s.std, a, sc, dev:(a/s.std-1)*100, gap:(sc/a-1)*100};
+});
+const bottleneck = stepAvg.reduce((m,s)=>s.dev>m.dev?s:m);
+
+document.getElementById('kpis').innerHTML = `
+  <div class="kpi"><div class="lb">监控批次 / 工步</div><div class="vl">13 支 × 6</div><div class="ft flat">6/1 – 6/25，缺 5 支</div></div>
+  <div class="kpi"><div class="lb">平均单支总节拍</div><div class="vl">${avgCyc.toFixed(0)} min</div><div class="ft up">标准 ${stdSum} min ｜ 均值达成率 ${avgAtt.toFixed(1)}%</div></div>
+  <div class="kpi"><div class="lb">节拍趋势（前3批→后3批）</div><div class="vl">${trendPct>0?'+':''}${trendPct.toFixed(1)}%</div><div class="ft up">未见收敛：${first3.toFixed(0)} → ${last3.toFixed(0)} min</div></div>
+  <div class="kpi"><div class="lb">最优 / 最差批次</div><div class="vl" style="font-size:18px">${best.date.slice(5)} / ${worst.date.slice(5)}</div><div class="ft"><span class="down">${Math.min(...cycArr).toFixed(0)} min(97.4%)</span> ｜ <span class="up">${Math.max(...cycArr).toFixed(0)} min(127.4%)</span></div></div>
+  <div class="kpi"><div class="lb">最大瓶颈工步</div><div class="vl" style="font-size:18px">OT12 预制UD安放</div><div class="ft up">实际均值超标准 +${bottleneck.dev.toFixed(1)}%</div></div>
+  <div class="kpi"><div class="lb">场景系统人工时覆盖率</div><div class="vl">${avgCover.toFixed(1)}%</div><div class="ft flat">6/23–6/24 冲高至 70%–86%</div></div>`;
+
+// ---------- 图1: 总节拍趋势 ----------
+new Chart(c1,{data:{labels:dates,datasets:[
+  {type:'bar',label:'单支总节拍(min)',data:cycArr.map(v=>+v.toFixed(1)),backgroundColor:cycArr.map((_,i)=>attain[i]>115?'#fca5a5':attain[i]>105?'#fdba74':'#86efac'),borderColor:cycArr.map((_,i)=>attain[i]>115?'#dc2626':attain[i]>105?'#ea580c':'#16a34a'),borderWidth:1,borderRadius:4,yAxisID:'y'},
+  {type:'line',label:'标准节拍 394',data:Array(13).fill(stdSum),borderColor:'#dc2626',borderDash:[6,4],borderWidth:2,pointRadius:0,yAxisID:'y'},
+  {type:'line',label:'达成率(%)',data:attain.map(v=>+v.toFixed(1)),borderColor:'#2563eb',backgroundColor:'#2563eb',borderWidth:2,tension:.3,pointRadius:4,yAxisID:'y2'}
+]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+  plugins:{legend:{labels:{usePointStyle:true}},tooltip:{callbacks:{title:it=>totals[it[0].dataIndex].date+' '+totals[it[0].dataIndex].serial}}},
+  scales:{y:{beginAtZero:true,title:{display:true,text:'min'}},y2:{position:'right',min:80,max:140,grid:{drawOnChartArea:false},title:{display:true,text:'达成率%'}}},aspectRatio:3.2}});
+
+// ---------- 图2: 分工步趋势 ----------
+const ds2=[];
+steps.forEach((s,i)=>{
+  ds2.push({label:s.code+' '+s.step,data:totals.map(t=>{const r=rec.find(x=>x.date===t.date&&x.code===s.code);return r?+r.actual.toFixed(1):null}),borderColor:C[i],backgroundColor:C[i],borderWidth:2,tension:.3,pointRadius:3});
+  ds2.push({label:s.code+' 标准',data:Array(13).fill(s.std),borderColor:C[i],borderDash:[5,5],borderWidth:1.5,pointRadius:0,hidden:s.code!=='OT12'});
+});
+new Chart(c2,{type:'line',data:{labels:dates,datasets:ds2},options:{responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{labels:{usePointStyle:true,boxWidth:8}},tooltip:{callbacks:{title:it=>totals[it[0].dataIndex].date+' '+totals[it[0].dataIndex].serial}}},
+  scales:{y:{beginAtZero:true,title:{display:true,text:'min'}}},aspectRatio:3.2}});
+
+// ---------- 图3: 工步均值对比 ----------
+new Chart(c3,{type:'bar',data:{labels:stepAvg.map(s=>s.code+' '+s.step.slice(0,8)),datasets:[
+  {label:'标准节拍',data:stepAvg.map(s=>s.std),backgroundColor:'#cbd5e1',borderRadius:3},
+  {label:'实际工时均值',data:stepAvg.map(s=>+s.a.toFixed(1)),backgroundColor:stepAvg.map(s=>s.dev>0?'#dc2626':'#16a34a'),borderRadius:3},
+  {label:'场景系统工时均值',data:stepAvg.map(s=>+s.sc.toFixed(1)),backgroundColor:'#93c5fd',borderRadius:3}
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{usePointStyle:true}},
+  tooltip:{callbacks:{afterLabel:it=>it.datasetIndex===1?'较标准 '+(stepAvg[it.dataIndex].dev>0?'+':'')+stepAvg[it.dataIndex].dev.toFixed(1)+'%':it.datasetIndex===2?'场景/实际 +' + stepAvg[it.dataIndex].gap.toFixed(0)+'%':''}}},
+  scales:{y:{beginAtZero:true,title:{display:true,text:'min'}}},aspectRatio:1.6}});
+
+// ---------- 图4: 人工时对比 ----------
+new Chart(c4,{data:{labels:dates,datasets:[
+  {type:'bar',label:'MES实际人工时',data:totals.map(t=>t.mes_man),backgroundColor:'#94a3b8',borderRadius:3,yAxisID:'y'},
+  {type:'bar',label:'场景系统人工时',data:totals.map(t=>t.scene_man),backgroundColor:'#2563eb',borderRadius:3,yAxisID:'y'},
+  {type:'line',label:'覆盖率(%)',data:coverArr.map(v=>+v.toFixed(1)),borderColor:'#ea580c',backgroundColor:'#ea580c',borderWidth:2,tension:.3,pointRadius:4,yAxisID:'y2'}
+]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+  plugins:{legend:{labels:{usePointStyle:true}},tooltip:{callbacks:{title:it=>totals[it[0].dataIndex].date+' '+totals[it[0].dataIndex].serial}}},
+  scales:{y:{beginAtZero:true,title:{display:true,text:'人·min'}},y2:{position:'right',min:0,max:100,grid:{drawOnChartArea:false},title:{display:true,text:'覆盖率%'}}},aspectRatio:1.6}});
+
+// ---------- 洞察 ----------
+const il = [
+ `整体节拍未收敛：13 支平均总节拍 <b>${avgCyc.toFixed(0)} min</b>，超标准 ${stdSum} min 约 <b>${(avgAtt-100).toFixed(1)}%</b>；前 3 批均值 ${first3.toFixed(0)} → 后 3 批 ${last3.toFixed(0)} min（${trendPct>0?'+':''}${trendPct.toFixed(1)}%），未体现学习曲线效应。`,
+ `最大瓶颈为 <b>OT12 前缘预制UD安放</b>：实际均值 ${bottleneck.a.toFixed(0)} min vs 标准 ${bottleneck.std} min（<b>+${bottleneck.dev.toFixed(0)}%</b>），且批间波动大（103–187.5 min），建议优先做该工步的动作分解与人员配置优化。`,
+ `OT04 外蒙皮第一层铺设、OT18 B部分第一层内蒙皮铺设持续超标约 <b>+19%</b>；OT26/OT27 壳体真空系统制作稳定优于标准 <b>-32% ~ -35%</b>，标准节拍或有修订空间。`,
+ `人员场景系统工时普遍显著高于 MES 报工：OT01 高 <b>+180%</b>、OT04 <b>+166%</b>、OT18 <b>+129%</b>，而 OT12/26/27 仅高约 +21%——前三者场景系统捕捉到了大量 MES 未覆盖的准备/等待/辅助时间，是两系统口径差异的主要来源。`,
+ `<b>6/23–6/24 数据异常</b>：OT12 场景工时飙至 289 / 396 min（常态 110–195 min），带动当日场景人工时覆盖率达 70.1% / 85.5%（常态 33%–50%）。该异常恰出现在 5 支缺数（6/16–6/22）之后，建议核查场景系统采集是否正常或当日产线停滞。`,
+ `人员投入稳定：各批次参与人数均为 60 人（6/6 为 62 人），MES人工时 = 实际工时 × 参与人数，波动完全来自节拍时间。`
+];
+document.getElementById('insightList').innerHTML = il.map(x=>`<li>${x}</li>`).join('');
+
+// ---------- 明细表 ----------
+const fStep=document.getElementById('fStep'), fBatch=document.getElementById('fBatch');
+fStep.innerHTML='<option value="all">全部工步</option>'+steps.map(s=>`<option>${s.code}</option>`).join('');
+fBatch.innerHTML='<option value="all">全部批次</option>'+totals.map(t=>`<option>${t.date.slice(5)}</option>`).join('');
+let sortK=null,sortD=1;
+function renderTbl(){
+  const fs=fStep.value, fb=fBatch.value;
+  let rows=rec.filter(r=>(fs==='all'||r.code===fs)&&(fb==='all'||r.date.slice(5)===fb));
+  if(sortK) rows=[...rows].sort((a,b)=>((a[sortK]??'')<(b[sortK]??'')?-1:1)*sortD);
+  const cols=[['date','日期'],['serial','产品编号'],['code','工步'],['step','步骤名称'],['std','标准节拍'],['actual','实际工时'],['headcount','参与人数'],['scene','场景工时'],['mes_man','MES人工时'],['scene_man','场景人工时']];
+  let h='<thead><tr>'+cols.map(c=>`<th data-k="${c[0]}">${c[1]}${sortK===c[0]?(sortD===1?' ▲':' ▼'):''}</th>`).join('')+'<th>实际vs标准</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const dev=((r.actual/r.std-1)*100);
+    h+=`<tr><td>${r.date.slice(5)}</td><td>${r.serial}</td><td>${r.code}</td><td>${r.step}</td><td>${r.std}</td><td>${r.actual}</td><td>${r.headcount}</td><td>${r.scene}</td><td>${(+r.mes_man.toFixed(1)).toLocaleString()}</td><td>${(+r.scene_man.toFixed(1)).toLocaleString()}</td><td class="${dev>0?'neg':'pos'}">${dev>0?'+':''}${dev.toFixed(1)}%</td></tr>`;
+  });
+  document.getElementById('tbl').innerHTML=h+'</tbody>';
+  document.querySelectorAll('#tbl th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;sortD=sortK===k?-sortD:1;sortK=k;renderTbl();});
+}
+fStep.onchange=fBatch.onchange=renderTbl;
+renderTbl();
+</script>
+</body>
+</html>
